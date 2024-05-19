@@ -12,7 +12,40 @@ library(dplyr)
 library(ggplot2)
 library(purrr)
 library(tibble)
+library(caret)
+library(tidyverse)
 ```
+
+# Function
+
+```{r}
+sim_sir <- function(g,beta,mu,seeds){
+  state <- rep(0,vcount(g)) #initial state of the simulation
+  state[seeds] <- 1 #infect the seeds
+  t <- 0
+  table <- data.frame(t=0,inf=seeds)
+  while(sum(state==1)>0){
+    t <- t + 1
+    ## I -> R
+    infected <- which(state==1) #get them
+    # generate a random value for every infected, if it's < mu, let the node recover.
+    state[infected] <- ifelse(runif(length(infected)) < mu,2,1)
+    
+    ## S -> I
+    infected <- which(state==1)
+    susceptible <- which(state==0) #get them
+    contacts <- as.numeric(unlist(adjacent_vertices(g,infected))) #get the contacts of infected
+    contacts <- contacts[contacts %in% susceptible] # get those who are susceptible
+    new_infected <- contacts[runif(length(contacts)) < beta] #infect contacts
+    if(length(new_infected)>0){
+      state[new_infected] <- 1
+      table <- rbind(table,data.frame(t,inf=new_infected))
+    }
+  }
+  table
+}
+```
+
 
 # Data collection
 
@@ -115,4 +148,187 @@ table <- merge(table,table_pr)
 table <- merge(table,table_b)
 cor(table$t,table[,-c(1,2)])
 ```
+
+```{r}
+seeds <- sample(1:vcount(g),vcount(g)*0.01)
+realization_random <- sim_sir(g,beta = 0.5,mu=0.1,seeds) %>%
+  group_by(t) %>% summarize(ninf=n())
+seeds <- closeness(g) %>% enframe(name = "inf",value="closeness") %>%
+  slice_max(closeness,n=round(vcount(g)*0.01,0))
+
+seeds_inf <- seeds$inf
+seeds_inf <- as.integer(seeds_inf)
+all(seeds_inf %in% V(g)) 
+
+realization_targeted <- sim_sir(g,beta = 0.5,mu=0.1,seeds_inf) %>%
+  group_by(t) %>% summarize(ninf=n())
+ggplot() + geom_line(data=realization_random,aes(x=t,y=ninf,col="Random"))+
+  geom_line(data=realization_targeted,aes(x=t,y=ninf,col="Targeted"))
+
+```
+
+```{r}
+total_infected_random <- sum(realization_random$ninf)
+total_infected_targeted <- sum(realization_targeted$ninf)
+difference_infected <- total_infected_targeted - total_infected_random
+
+print(paste("Total Infected (Random)", total_infected_random))
+print(paste("Total Infected (Targeted)", total_infected_targeted))
+print(paste("Difference in Infected", difference_infected))
+```
+
+### Vaccinate people not to spread the trust
+
+```{r}
+seeds <- sample(1:vcount(g),vcount(g)*0.01)
+realization <- sim_sir(g,beta = 0.5,mu=0.1,seeds) %>%
+  group_by(t) %>% summarize(ninf=n())
+vaccinated_random <- sample(1:vcount(g),vcount(g)*0.05)
+gp <- delete_vertices(g,vaccinated_random)
+seeds <- sample(1:vcount(gp),vcount(gp)*0.01)
+realization_random <- sim_sir(gp,beta = 0.5,mu=0.1,seeds) %>%
+  group_by(t) %>% summarize(ninf=n())
+```
+
+### Choose the seeds with largest centrality
+
+```{r}
+seeds <- closeness(g) %>% enframe(name = "inf",value="closeness") %>%
+  slice_max(closeness,n=round(vcount(g)*0.05,0))
+gp <- delete_vertices(g,seeds$inf)
+seeds <- sample(1:vcount(gp),vcount(gp)*0.01)
+realization_targeted <- sim_sir(gp,beta = 0.5,mu=0.1,seeds) %>%
+  group_by(t) %>% summarize(ninf=n())
+```
+
+```{r}
+ggplot() + geom_line(data=realization,aes(x=t,y=ninf,col="No Vaccination")) +
+  geom_line(data=realization_random,aes(x=t,y=ninf,col="Vacc. Random"))+
+  geom_line(data=realization_targeted,aes(x=t,y=ninf,col="Vacc. Targeted"))
+```
+
+```{r}
+No_Vaccination <- sum(realization$ninf)
+Vacc._Random <- sum(realization_random$ninf)
+Vacc._Targeted <- sum(realization_targeted$ninf)
+
+print(paste("No Vaccination", No_Vaccination))
+print(paste("Vacc. Random", Vacc._Random))
+print(paste("Vacc. Targeted", Vacc._Targeted))
+
+Vaccination_table <- data.frame(vaccination_label = c("Vacc. Random", "Vacc. Targeted", "No Vaccination"),
+                                vaccination_value = c(Vacc._Random, Vacc._Targeted, No_Vaccination))
+Vaccination_table
+```
+
+### Explanation for part c (1%) and part d (5%)
+
+```{r}
+print(paste("Total Infected (Random)", total_infected_random))
+print(paste("Total Infected (Targeted)", total_infected_targeted))
+print(paste("Difference in Infected", difference_infected))
+
+partc <- data.frame("partc_label" = c("Total Infected (Random)", "Total Infected (Targeted)", 
+                                          "Difference in Infected"),
+                                "partc_value" = c(total_infected_random, total_infected_targeted, difference_infected))
+
+merged_table <- cbind(Vaccination_table, partc)
+merged_table
+```
+
+With only 1% coverage, random vaccination appears more effective than targeted vaccination, indicating that the targeting strategy might not be optimal or insufficient at this low level. However, at 5% coverage, targeted vaccination drastically reduces the number of infections compared to random vaccination and no vaccination, demonstrating its effectiveness when a sufficient proportion of the network is vaccinated.
+
+This comparison emphasizes that while targeted vaccination can be very effective, it requires an adequate level of coverage to identify and protect the most critical nodes in the network. Random vaccination might provide more immediate benefits at very low coverage levels but does not capitalize on the network's structure as effectively as targeted vaccination at higher coverage levels.
+
+### Sensor spreading
+
+```{r}
+all <- table_d %>% group_by(t) %>% summarize(ninf=n())
+sensors <- table_d %>% filter(degree>10) %>% group_by(t) %>% summarize(ninf=n())
+ggplot() + geom_line(data=all,aes(x=t,y=ninf/sum(ninf),col="All")) + geom_line(data=sensors,aes(x=t,y=ninf/sum(ninf),col="Sensors"))
+```
+
+### neighbor
+
+```{r}
+control <- sample(1:vcount(g),1000)
+get_one_neighbor <- function(id){
+  sample(neighbors(g,id),1)
+}
+sensors <- sapply(control,get_one_neighbor)
+```
+
+### cummulative plot
+
+```{r}
+control_evo <- table_d %>% filter(inf %in% control) %>% group_by(t) %>% summarize(ninf=n())
+sensors_evo <- table_d %>% filter(inf %in% sensors) %>% group_by(t) %>% summarize(ninf=n())
+ggplot() + geom_line(data=control_evo,aes(x=t,y=cumsum(ninf/sum(ninf)),col="All")) +
+  geom_line(data=sensors_evo,aes(x=t,y=cumsum(ninf/sum(ninf)),col="Sensors")) + labs(y="# infections (cumm)")
+```
+
+Control is the random connection and sensors used the friendship paradox which means your friends normally have more friends than you. Therefore, when we have used the sensors proxy then there are more people who got infected than the randomly chosen people. 
+
+## Prediction
+### Linear Regression
+
+```{r}
+table
+
+# Split the data into training and testing sets
+set.seed(123)
+train_index <- createDataPartition(table$t, p = 0.8, list = FALSE)
+test_data <- table[-train_index, ] |> select(-inf)
+
+# 5-fold cross validation
+train_data <- table[train_index, ] |> select(-inf)
+
+control <- trainControl(method = "cv",  # Use k-fold cross-validation
+                        number = 5)
+
+# Train a regression model
+model <- train(t ~ ., data = train_data, method = "lm", trControl = control)
+
+cv_results <- model$results
+
+```
+
+Since the RMSE is too high, we have used the lasso regularization.
+
+```{r}
+x <- as.matrix(train_data[,-1])
+y <- train_data$t
+
+control <- trainControl(method = "repeatedcv", number = 10, repeats = 5)
+
+ridge_model <- train(
+  x, y,
+  method = "glmnet",
+  trControl = control,
+  tuneGrid = expand.grid(alpha = 0, lambda = 10^seq(-3, 0, length = 100))
+)
+
+ridge_model$bestTune
+
+prediciton <- predict(ridge_model, newdata = x)
+sqrt(mean((prediciton - y)^2))
+
+
+
+# Evaluate the model on the test data
+predictions_t <- predict(model, newdata = train_data)
+rmse <- sqrt(mean((predictions_t - train_data$t)^2))
+print(paste("RMSE on test data:", rmse))
+
+predictions <- predict(model, newdata = test_data)
+rmse <- sqrt(mean((predictions - test_data$t)^2))
+print(paste("RMSE on test data:", rmse))
+```
+
+
+
+```{r}
+
+```
+
 
