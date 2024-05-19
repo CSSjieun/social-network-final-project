@@ -1,0 +1,118 @@
+---
+title: "Final project"
+author: "Jieun Park"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r}
+library(readr)
+library(igraph)
+library(dplyr)
+library(ggplot2)
+library(purrr)
+library(tibble)
+```
+
+# Data collection
+
+```{r}
+node <- read.csv("nodes.csv") |> select("X..index", "meta")
+edge <- read.csv("edges.csv")
+
+graph <- graph_from_data_frame(edge, vertices = node, directed = FALSE)
+graph <- simplify(graph)
+
+cluster <- clusters(graph)
+giant_component <- which.max(cluster$csize)
+node_giant <- V(graph)[cluster$membership == giant_component]
+
+g <- induced_subgraph(graph, node_giant)
+g
+
+plot(g, vertex.label = NULL, vertex.size = 3)
+```
+
+# 1. Finding epidemic threshold
+
+```{r}
+mu <- 0.1
+betac <- mu*mean(degree(g))/(mean(degree(g)^2))
+betac
+```
+
+# 2. Simulating the SIR model
+
+```{r}
+seeds <- sample(1:vcount(g),vcount(g)*0.01)
+
+realization <- sim_sir(g,beta = 0.5,mu=0.1,seeds) %>% 
+  group_by(t) %>% summarize(ninf=n()) 
+
+realization %>% 
+  ggplot(aes(x=t,y=ninf)) + geom_line()
+```
+
+## plot SIR with several beta
+
+```{r}
+results <- map_dfr(seq(0,0.2,0.01), # beta range
+        \(beta){ seeds <- sample(1:vcount(g),vcount(g)*0.01)
+        realization <- sim_sir(g,beta,mu,seeds) # make a realization for each beta
+        data.frame(beta,ninf=nrow(realization)) # create dataframe row
+        })
+
+results %>% ggplot(aes(x=beta,y=ninf))+ geom_point()+
+  geom_vline(xintercept = betac,linetype=2) 
+```
+
+## 3. Centrality Proxies
+
+```{r}
+realization <- sim_sir(g,beta=0.1,mu=0.1,seeds)
+```
+
+
+### degree
+
+```{r}
+table_d <- degree(g) %>% enframe(name = "inf",value="degree") %>%
+  merge(realization) 
+table_d %>% 
+  ggplot(aes(x=t,y=degree)) + geom_point() + scale_y_log10()
+```
+
+
+### closeness
+
+```{r}
+table_c <- closeness(g) %>% enframe(name = "inf",value="closeness") %>%
+  merge(realization) 
+table_c %>% 
+  ggplot(aes(x=t,y=closeness)) + geom_point() + scale_y_log10()
+```
+
+### betweeness
+
+```{r}
+table_b <- betweenness(g) %>% enframe(name = "inf",value="betweenness") %>%
+  merge(realization) 
+table_b %>% 
+  ggplot(aes(x=t,y=betweenness)) + geom_point() + scale_y_log10()
+```
+### page rank
+
+```{r}
+table_pr <- page_rank(g)$vector %>% enframe(name = "inf",value="page_rank") %>%
+  merge(realization) 
+table_pr %>% 
+  ggplot(aes(x=t,y=page_rank)) + geom_point() + scale_y_log10()
+```
+
+```{r}
+table <- merge(table_d,table_c)
+table <- merge(table,table_pr)
+table <- merge(table,table_b)
+cor(table$t,table[,-c(1,2)])
+```
+
