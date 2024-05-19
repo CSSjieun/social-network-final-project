@@ -1,0 +1,245 @@
+---
+title: "social network final project basic code"
+author: "Jieun Park"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Simulating the SIR model 
+
+
+```{r cars}
+sim_sir <- function(g,beta,mu,seeds){
+  state <- rep(0,vcount(g)) #initial state of the simulation
+  state[seeds] <- 1 #infect the seeds
+  t <- 0
+  table <- data.frame(t=0,inf=seeds)
+  while(sum(state==1)>0){
+    t <- t + 1
+    ## I -> R
+    infected <- which(state==1) #get them
+    # generate a random value for every infected, if it's < mu, let the node recover.
+    state[infected] <- ifelse(runif(length(infected)) < mu,2,1)
+    
+    ## S -> I
+    infected <- which(state==1)
+    susceptible <- which(state==0) #get them
+    contacts <- as.numeric(unlist(adjacent_vertices(g,infected))) #get the contacts of infected
+    contacts <- contacts[contacts %in% susceptible] # get those who are susceptible
+    new_infected <- contacts[runif(length(contacts)) < beta] #infect contacts
+    if(length(new_infected)>0){
+      state[new_infected] <- 1
+      table <- rbind(table,data.frame(t,inf=new_infected))
+    }
+  }
+  table
+}
+```
+
+## Including Plots
+
+The output of our sim_sir function is a table with the ids of the nodes and when they got infected.
+
+```{r pressure, echo=FALSE}
+# Sample a preferential attachnment network
+g <- sample_pa(100,directed=F,m=2); 
+# Sample an initial infectious seed
+seeds <- sample(1:vcount(g),1)
+# Generate a simlulation of the SIR model
+realization <- sim_sir(g,beta = 0.5,mu=0.1,seeds) 
+realization
+```
+
+
+Let’s get a one realization on a bigger preferential-attachment graph (Barabasi) with 1% random seeds.
+```{r}
+g <- sample_pa(10000,directed=F,m=2)
+seeds <- sample(1:vcount(g),vcount(g)*0.01)
+realization <- sim_sir(g,beta = 0.5,mu=0.1,seeds) 
+```
+
+visualize the infection 
+
+```{r}
+realization <- sim_sir(g,beta = 0.5,mu=0.1,seeds) %>% 
+  group_by(t) %>% summarize(ninf=n()) 
+realization %>% 
+  ggplot(aes(x=t,y=ninf)) + geom_line()
+```
+
+check epidemic threshold 
+```{r}
+mu <- 0.1
+betac <- mu*mean(degree(g))/(mean(degree(g)^2))
+betac
+```
+ 
+ Calculating each realization the number of total infections and trying different values of β and fixed μ.
+ 
+```{r}
+results <- map_dfr(seq(0,0.2,0.01), # beta range
+        \(beta){ seeds <- sample(1:vcount(g),vcount(g)*0.01)
+        realization <- sim_sir(g,beta,mu,seeds) # make a realization for each beta
+        data.frame(beta,ninf=nrow(realization)) # create dataframe row
+        })
+results %>% ggplot(aes(x=beta,y=ninf))+ geom_point()+
+  geom_vline(xintercept = betac,linetype=2)
+```
+ 
+Simulating the SIR model on a Erdos-Renyi graph with the same average degree
+
+```{r}
+er <- sample_gnm(n=vcount(g),m=ecount(g),directed = F)
+```
+
+calculating beta (threshold)
+
+```{r}
+betac_er <- mu*mean(degree(er))/(mean(degree(er)^2))
+betac_er
+```
+
+Simulating
+
+```{r}
+mu <- 0.1
+results_er <- map_dfr(seq(0,0.2,0.01),
+        \(beta){seeds <- sample(1:vcount(er),vcount(er)*0.01)
+          realization <- sim_sir(er,beta,mu,seeds)
+          data.frame(beta,ninf=nrow(realization))
+        })
+ggplot() + geom_line(data=results,aes(x=beta,y=ninf,col="PA"))+
+  geom_line(data=results_er,aes(x=beta,y=ninf,col="ER"))
+```
+
+### Which nodes get the infection earlier?
+Simulating spreading above the threshold 
+```{r}
+realization <- sim_sir(g,beta=0.1,mu=0.1,seeds)
+```
+
+Adding the degree of each node and see the relationship between degree and time to infection:
+
+```{r}
+table_d <- degree(g) %>% enframe(name = "inf",value="degree") %>%
+  merge(realization) 
+table_d %>% 
+  ggplot(aes(x=t,y=degree)) + geom_point() + scale_y_log10()
+```
+
+#Other types of centrality 
+
+closeness
+
+```{r}
+table_c <- closeness(g) %>% enframe(name = "inf",value="closeness") %>%
+  merge(realization) 
+table_c %>% 
+  ggplot(aes(x=t,y=closeness)) + geom_point() + scale_y_log10()
+```
+
+betweenness
+
+```{r}
+table_b <- betweenness(g) %>% enframe(name = "inf",value="betweenness") %>%
+  merge(realization) 
+table_b %>% 
+  ggplot(aes(x=t,y=betweenness)) + geom_point() + scale_y_log10()
+```
+
+page rank 
+
+```{r}
+table_pr <- page_rank(g)$vector %>% enframe(name = "inf",value="page_rank") %>%
+  merge(realization) 
+table_pr %>% 
+  ggplot(aes(x=t,y=page_rank)) + geom_point() + scale_y_log10()
+```
+
+Which predicts better the time to infection? 
+```{r}
+table <- merge(table_d,table_c)
+table <- merge(table,table_pr)
+table <- merge(table,table_b)
+cor(table$t,table[,-c(1,2)])
+```
+
+##Immunize/seed networks to prevent/accelerate spreading
+What will happen if we select our seeds according to centrality?
+
+```{r}
+seeds <- sample(1:vcount(g),vcount(g)*0.01)
+realization_random <- sim_sir(g,beta = 0.5,mu=0.1,seeds) %>%
+  group_by(t) %>% summarize(ninf=n())
+seeds <- closeness(g) %>% enframe(name = "inf",value="closeness") %>%
+  slice_max(closeness,n=vcount(g)*0.01)
+realization_targeted <- sim_sir(g,beta = 0.5,mu=0.1,seeds$inf) %>%
+  group_by(t) %>% summarize(ninf=n())
+ggplot() + geom_line(data=realization_random,aes(x=t,y=ninf,col="Random"))+
+  geom_line(data=realization_targeted,aes(x=t,y=ninf,col="Targeted"))
+```
+
+Vaccination 
+
+20% of the nodes in the network randomly
+
+```{r}
+seeds <- sample(1:vcount(g),vcount(g)*0.01)
+realization <- sim_sir(g,beta = 0.5,mu=0.1,seeds) %>%
+  group_by(t) %>% summarize(ninf=n())
+vaccinated_random <- sample(1:vcount(g),vcount(g)*0.2)
+gp <- delete_vertices(g,vaccinated_random)
+seeds <- sample(1:vcount(gp),vcount(gp)*0.01)
+realization_random <- sim_sir(gp,beta = 0.5,mu=0.1,seeds) %>%
+  group_by(t) %>% summarize(ninf=n())
+```
+
+Choosing the seeds with the largest centrality 
+```{r}
+seeds <- closeness(g) %>% enframe(name = "inf",value="closeness") %>%
+  slice_max(closeness,n=vcount(g)*0.2)
+gp <- delete_vertices(g,seeds$inf)
+seeds <- sample(1:vcount(gp),vcount(gp)*0.01)
+realization_targeted <- sim_sir(gp,beta = 0.5,mu=0.1,seeds) %>%
+  group_by(t) %>% summarize(ninf=n())
+```
+
+Visualizing the evolution together with the realization with no vaccination we got earlier.
+
+```{r}
+ggplot() + geom_line(data=realization,aes(x=t,y=ninf,col="No Vaccination")) +
+  geom_line(data=realization_random,aes(x=t,y=ninf,col="Vacc. Random"))+
+  geom_line(data=realization_targeted,aes(x=t,y=ninf,col="Vacc. Targeted"))
+```
+
+##Sensors of the spreading
+
+Selecting a group of nodes that signal when the spreading is happening
+```{r}
+all <- table_d %>% group_by(t) %>% summarize(ninf=n())
+sensors <- table_d %>% filter(degree>10) %>% group_by(t) %>% summarize(ninf=n())
+ggplot() + geom_line(data=all,aes(x=t,y=ninf/sum(ninf),col="All")) + geom_line(data=sensors,aes(x=t,y=ninf/sum(ninf),col="Sensors"))
+```
+
+Picking a random set of nodes in the network (our control group) and use one random neighbor of them as the sensor group
+```{r}
+control <- sample(1:vcount(g),1000)
+get_one_neighbor <- function(id){
+  sample(neighbors(g,id),1)
+}
+sensors <- sapply(control,get_one_neighbor)
+```
+
+Visualization when they get infected (cummulative)
+
+```{r}
+control_evo <- table_d %>% filter(inf %in% control) %>% group_by(t) %>% summarize(ninf=n())
+sensors_evo <- table_d %>% filter(inf %in% sensors) %>% group_by(t) %>% summarize(ninf=n())
+ggplot() + geom_line(data=control_evo,aes(x=t,y=cumsum(ninf/sum(ninf)),col="All")) +
+  geom_line(data=sensors_evo,aes(x=t,y=cumsum(ninf/sum(ninf)),col="Sensors")) + labs(y="# infections (cumm)")
+```
+
