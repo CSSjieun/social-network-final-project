@@ -167,6 +167,8 @@ ggplot() + geom_line(data=realization_random,aes(x=t,y=ninf,col="Random"))+
 
 ```
 
+We have plotted the SIR model distribution with the random and targeted nodes. The parameters are β and µ. β is 0.5 (infection rate is 50%) and µ is 0.1 (recovery rate is 10%). From the plot, we are able to notice that targeted nodes which has higher centrality get infected more and bit earlier than the randomly chosen nodes' infection distribution. 
+
 ```{r}
 total_infected_random <- sum(realization_random$ninf)
 total_infected_targeted <- sum(realization_targeted$ninf)
@@ -176,6 +178,8 @@ print(paste("Total Infected (Random)", total_infected_random))
 print(paste("Total Infected (Targeted)", total_infected_targeted))
 print(paste("Difference in Infected", difference_infected))
 ```
+
+Here, we have number of the infected people from random and targeted nodes. Since our data is about the trust, we can interpret that when the nodes are selected randomly, then, the trust spread to 11718 people. If the nodes are selected having high centrality, the, the trust spread to 13117 people. The difference between two distribution is 1459. We can conclude that when nodes have high centrality, trust spreading amount and speed is higher than randomly selected nodes. 
 
 ### Vaccinate people not to spread the trust
 
@@ -189,6 +193,8 @@ seeds <- sample(1:vcount(gp),vcount(gp)*0.01)
 realization_random <- sim_sir(gp,beta = 0.5,mu=0.1,seeds) %>%
   group_by(t) %>% summarize(ninf=n())
 ```
+
+Now, we will do the experiment to investigate the impact of controlled situation. We will control some nodes not to spread the trust as much as in the normal situation likewise people get vaccinated. 
 
 ### Choose the seeds with largest centrality
 
@@ -207,6 +213,8 @@ ggplot() + geom_line(data=realization,aes(x=t,y=ninf,col="No Vaccination")) +
   geom_line(data=realization_targeted,aes(x=t,y=ninf,col="Vacc. Targeted"))
 ```
 
+This is the plot to show the impact of the 'vaccination' to control people not to spread the trust as much as in the normal environment. As we can expect, when people are not controlled, then the probability of trust spread is the highest. However, when people get 'vaccinated' then the probability of trust spreading get reduced. Moreover, when targeted nodes which has high centrality get vaccinated, then the probability even lowered than node from random selection. Therefore, we can conclude that we can control the spreading among people efficiently when we control the highly connected node first. 
+
 ```{r}
 No_Vaccination <- sum(realization$ninf)
 Vacc._Random <- sum(realization_random$ninf)
@@ -220,6 +228,8 @@ Vaccination_table <- data.frame(vaccination_label = c("Vacc. Random", "Vacc. Tar
                                 vaccination_value = c(Vacc._Random, Vacc._Targeted, No_Vaccination))
 Vaccination_table
 ```
+
+This is the number of infected people. When there is no vaccination control then the infected people are the highest (11986). But once the spreading is controlled, the number get lowered as we explained above as 10502 for random selection and 7494 for targeted selection. 
 
 ### Explanation for part c (1%) and part d (5%)
 
@@ -270,7 +280,7 @@ ggplot() + geom_line(data=control_evo,aes(x=t,y=cumsum(ninf/sum(ninf)),col="All"
 Control is the random connection and sensors used the friendship paradox which means your friends normally have more friends than you. Therefore, when we have used the sensors proxy then there are more people who got infected than the randomly chosen people. 
 
 ## Prediction
-### Linear Regression
+### 1. Linear Regression
 
 ```{r}
 table
@@ -290,10 +300,10 @@ control <- trainControl(method = "cv",  # Use k-fold cross-validation
 model <- train(t ~ ., data = train_data, method = "lm", trControl = control)
 
 cv_results <- model$results
-
+cv_results
 ```
 
-Since the RMSE is too high, we have used the lasso regularization.
+Since the RMSE is too high, we have used the ridge regularization (L2 regularization).
 
 ```{r}
 x <- as.matrix(train_data[,-1])
@@ -308,24 +318,34 @@ ridge_model <- train(
   tuneGrid = expand.grid(alpha = 0, lambda = 10^seq(-3, 0, length = 100))
 )
 
-ridge_model$bestTune
+best_tune <- ridge_model$bestTune
+best_tune
+```
 
+```{r}
 prediciton <- predict(ridge_model, newdata = x)
 sqrt(mean((prediciton - y)^2))
+```
 
-
-
+```{r}
 # Evaluate the model on the test data
-predictions_t <- predict(model, newdata = train_data)
+predictions_t <- predict(ridge_model, newdata = train_data)
 rmse <- sqrt(mean((predictions_t - train_data$t)^2))
 print(paste("RMSE on test data:", rmse))
 
-predictions <- predict(model, newdata = test_data)
+predictions <- predict(ridge_model, newdata = test_data)
 rmse <- sqrt(mean((predictions - test_data$t)^2))
 print(paste("RMSE on test data:", rmse))
+
+RMSE_lm <- data.frame(data = c("train", "test"), 
+                      RMSE = c(sqrt(mean((predictions_t - train_data$t)^2)), 
+                               sqrt(mean((predictions - test_data$t)^2))))
+RMSE_lm
 ```
 
+Even though, we have used the 5-fold cross validation and ridge regularization (L2), the RMSE is still high as 0.87 for the test data set. We consider this happens because the scale of the input data are different so we rather chose random forest which does not require the data scaling. 
 
+### 2. Random Forest
 
 ```{r}
 
