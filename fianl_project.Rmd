@@ -2,8 +2,16 @@
 title: "Final project"
 author: "Jieun Park"
 date: "`r Sys.Date()`"
-output: html_document
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
 ---
+
+This is the project to investigate spreading situation by network graph.
+Here, we have used the data of social network which indicates the trust in the social relationship. 
+We will identify how trust distribution changes as time passes and also will see the vaccination impact.
+Here, even though trust is not controlled by the vaccination likewise the pandemic situation, to make the understanding better, we will use the term of vaccination. 
 
 ```{r}
 library(readr)
@@ -46,7 +54,6 @@ sim_sir <- function(g,beta,mu,seeds){
 }
 ```
 
-
 # Data collection
 
 ```{r}
@@ -63,7 +70,7 @@ node_giant <- V(graph)[cluster$membership == giant_component]
 g <- induced_subgraph(graph, node_giant)
 g
 
-plot(g, vertex.label = NULL, vertex.size = 3)
+plot(g, vertex.label = NA, vertex.size = 3)
 ```
 
 # 1. Finding epidemic threshold
@@ -99,26 +106,26 @@ results %>% ggplot(aes(x=beta,y=ninf))+ geom_point()+
   geom_vline(xintercept = betac,linetype=2) 
 ```
 
-## 3. Centrality Proxies
+# 3. Centrality Proxies
 
 ```{r}
 realization <- sim_sir(g,beta=0.1,mu=0.1,seeds)
 ```
 
-
 ### degree
 
 ```{r}
+set.seed(12345)
 table_d <- degree(g) %>% enframe(name = "inf",value="degree") %>%
   merge(realization) 
 table_d %>% 
   ggplot(aes(x=t,y=degree)) + geom_point() + scale_y_log10()
 ```
 
-
 ### closeness
 
 ```{r}
+set.seed(12345)
 table_c <- closeness(g) %>% enframe(name = "inf",value="closeness") %>%
   merge(realization) 
 table_c %>% 
@@ -128,14 +135,17 @@ table_c %>%
 ### betweeness
 
 ```{r}
+set.seed(12345)
 table_b <- betweenness(g) %>% enframe(name = "inf",value="betweenness") %>%
   merge(realization) 
 table_b %>% 
   ggplot(aes(x=t,y=betweenness)) + geom_point() + scale_y_log10()
 ```
+
 ### page rank
 
 ```{r}
+set.seed(12345)
 table_pr <- page_rank(g)$vector %>% enframe(name = "inf",value="page_rank") %>%
   merge(realization) 
 table_pr %>% 
@@ -143,13 +153,17 @@ table_pr %>%
 ```
 
 ```{r}
+set.seed(12345)
 table <- merge(table_d,table_c)
 table <- merge(table,table_pr)
 table <- merge(table,table_b)
 cor(table$t,table[,-c(1,2)])
 ```
 
+The highest centrality proxy is 'closeness'. The correlation value between the time and closeness is -0.16. Therefore, as time passes, the closeness of nodes reduces by 0.16.
+
 ```{r}
+set.seed(12345)
 seeds <- sample(1:vcount(g),vcount(g)*0.01)
 realization_random <- sim_sir(g,beta = 0.5,mu=0.1,seeds) %>%
   group_by(t) %>% summarize(ninf=n())
@@ -162,12 +176,32 @@ all(seeds_inf %in% V(g))
 
 realization_targeted <- sim_sir(g,beta = 0.5,mu=0.1,seeds_inf) %>%
   group_by(t) %>% summarize(ninf=n())
+
 ggplot() + geom_line(data=realization_random,aes(x=t,y=ninf,col="Random"))+
-  geom_line(data=realization_targeted,aes(x=t,y=ninf,col="Targeted"))
+  geom_line(data=realization_targeted,aes(x=t,y=ninf,col="Targeted")) +
+  labs(
+    title = "Comparison of Infections Over Time",
+    subtitle = "Random vs. Targeted",
+    x = "Time (t)",
+    y = "Number of Trust Spreading (ninf)",
+    color = NULL
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size=14, face="bold"),
+    plot.subtitle = element_text(hjust = 0.5, size=12),
+    axis.title.x = element_text(size=12),
+    axis.title.y = element_text(size=12),
+    legend.position = "bottom"
+  ) +
+  scale_color_manual(values = c("Random" = "blue", "Targeted" = "red"))
 
 ```
 
-We have plotted the SIR model distribution with the random and targeted nodes. The parameters are β and µ. β is 0.5 (infection rate is 50%) and µ is 0.1 (recovery rate is 10%). From the plot, we are able to notice that targeted nodes which has higher centrality get infected more and bit earlier than the randomly chosen nodes' infection distribution. 
+We have plotted the SIR model distribution with the random and targeted nodes. The parameters are β and µ. β is 0.5 (infection rate is 50%) and µ is 0.1 (recovery rate is 10%). We have chosen the 'closeness' centrality proxy which has the highest correlation with the time.
+
+From the plot, we are able to notice that targeted nodes which has higher closeness centrality value get infected more and bit earlier than the randomly chosen nodes' infection distribution. 
+Therefore, we can identify that people who have the highest centrality would get spread the trust from social network faster than randomly selected population from the social network. 
 
 ```{r}
 total_infected_random <- sum(realization_random$ninf)
@@ -179,26 +213,40 @@ print(paste("Total Infected (Targeted)", total_infected_targeted))
 print(paste("Difference in Infected", difference_infected))
 ```
 
-Here, we have number of the infected people from random and targeted nodes. Since our data is about the trust, we can interpret that when the nodes are selected randomly, then, the trust spread to 11718 people. If the nodes are selected having high centrality, the, the trust spread to 13117 people. The difference between two distribution is 1459. We can conclude that when nodes have high centrality, trust spreading amount and speed is higher than randomly selected nodes. 
+Here, we have number of the infected people from random and targeted nodes. Since our data is about the trust, we can interpret that when the nodes are selected randomly, then, the trust spread to 12775 people. If the nodes are selected who have relatively higher centrality than other nodes, then, the trust spread to 13193 people. The difference between two distribution is 418. We can conclude that when nodes have high centrality, trust spreading amount and speed is higher than randomly selected nodes' distribution.
 
 ### Vaccinate people not to spread the trust
 
+- Choose those 5% randomly in the network. Simulate the SIR model above using 1% of the remaining nodes as seeds. Choose those seeds randomly.
+
 ```{r}
+set.seed(12345)
+
 seeds <- sample(1:vcount(g),vcount(g)*0.01)
-realization <- sim_sir(g,beta = 0.5,mu=0.1,seeds) %>%
-  group_by(t) %>% summarize(ninf=n())
+realization <- sim_sir(g,beta = 0.5,mu=0.1,seeds) |> group_by(t) |> summarize(ninf=n())
+
 vaccinated_random <- sample(1:vcount(g),vcount(g)*0.05)
 gp <- delete_vertices(g,vaccinated_random)
 seeds <- sample(1:vcount(gp),vcount(gp)*0.01)
-realization_random <- sim_sir(gp,beta = 0.5,mu=0.1,seeds) %>%
-  group_by(t) %>% summarize(ninf=n())
+realization_random <- sim_sir(gp,beta = 0.5,mu=0.1,seeds) |> group_by(t) |> summarize(ninf=n())
 ```
 
-Now, we will do the experiment to investigate the impact of controlled situation. We will control some nodes not to spread the trust as much as in the normal situation likewise people get vaccinated. 
+Now, we will do the experiment to investigate the impact of controlled situation (Assuming the situation when 5% of people get vaccinated). We will remove 5% of nodes randomly from the original network assuming those nodes are vaccinated. We hypothesized that the amount of trust spreading would not be large as much as in the normal situation that people are not vaccinated at all. We simulated three situations that people get no vaccinated, randomly selected people are vaccinated, and targeted people who have the highest closeness centrality get vaccinated to see how the trust spreading distribution changes as times goes by.
+
+These are the steps that we have done.
+First, we made seeds extracting 1% of the people from the original network graph of g.
+Then, we made the SIR model with the seeds. 
+The realization is the situation that people do not get vaccinated.
+
+Second, then we sampled 5% of people from the original network graph to simulate the situation the situation when 5% of people get vaccinated randomly then how the trust spreading distribution will be changed. 
+The variable named by 'realization_random' is the SIR model that assuming the situation that randomly selected 5% of people get vaccinated. 
 
 ### Choose the seeds with largest centrality
 
+- Choose those 5% according to their centrality. Simulate the SIR model above using 1% of the remaining nodes as seeds. Choose those seeds randomly.
+
 ```{r}
+set.seed(12345)
 seeds <- closeness(g) %>% enframe(name = "inf",value="closeness") %>%
   slice_max(closeness,n=round(vcount(g)*0.05,0))
 gp <- delete_vertices(g,seeds$inf)
@@ -207,13 +255,39 @@ realization_targeted <- sim_sir(gp,beta = 0.5,mu=0.1,seeds) %>%
   group_by(t) %>% summarize(ninf=n())
 ```
 
+Third, this is the last scenario which assumes 5% of people who have the highest closeness centrality would be vaccinated. 
+'realization_targeted' is the SIR model that assuming the situation that 5% of targeted population would be vaccinated. 
+
+### Measure the difference between both cases
+
 ```{r}
 ggplot() + geom_line(data=realization,aes(x=t,y=ninf,col="No Vaccination")) +
   geom_line(data=realization_random,aes(x=t,y=ninf,col="Vacc. Random"))+
-  geom_line(data=realization_targeted,aes(x=t,y=ninf,col="Vacc. Targeted"))
+  geom_line(data=realization_targeted,aes(x=t,y=ninf,col="Vacc. Targeted")) +
+  theme_minimal() + labs(
+    color = "Vaccination Strategy",  # Set the legend title for the color aesthetic
+    title = "Comparison of Trust Spread Over Time",
+    subtitle = "No Vaccination vs. Random Vaccination vs. Targeted Vaccination",
+    x = "Time (t)",
+    y = "Number of trust spread (ninf)"
+  ) +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+    plot.subtitle = element_text(hjust = 0.5, size = 12),
+    axis.title.x = element_text(size = 12),
+    axis.title.y = element_text(size = 12),
+    legend.position = "bottom"
+  ) +
+    scale_color_manual(values = c("No Vaccination" = "blue", "Vacc. Random" = "red", "Vacc. Targeted" = "green"))
 ```
 
-This is the plot to show the impact of the 'vaccination' to control people not to spread the trust as much as in the normal environment. As we can expect, when people are not controlled, then the probability of trust spread is the highest. However, when people get 'vaccinated' then the probability of trust spreading get reduced. Moreover, when targeted nodes which has high centrality get vaccinated, then the probability even lowered than node from random selection. Therefore, we can conclude that we can control the spreading among people efficiently when we control the highly connected node first. 
+This is the plot to show the impact of the 'vaccination' to control people not to spread the trust as much as in the normal environment. 
+As we can expect, when people are not controlled (no vaccination, blue), then the probability of trust spread the most rapidly at the first time period between 0 and 5. 
+However, when people get 'vaccinated' then the probability of trust spreading get reduced. 
+For example, when randomly selected people are vaccinated (red), then the number of infections get reduced than the not vaccination scenario at the time period between 0 and 5 and the total amount of spread number is also get reduced. 
+Moreover, when the population are selected by the closeness centrality, then the impact of the vaccination is even higher. 
+
+Therefore, we can conclude that, when people who have the highest centrality are vaccinated then it is easier to control the infection or spreading speed and amount than vaccinating randomly selected population. 
 
 ```{r}
 No_Vaccination <- sum(realization$ninf)
@@ -224,12 +298,12 @@ print(paste("No Vaccination", No_Vaccination))
 print(paste("Vacc. Random", Vacc._Random))
 print(paste("Vacc. Targeted", Vacc._Targeted))
 
-Vaccination_table <- data.frame(vaccination_label = c("Vacc. Random", "Vacc. Targeted", "No Vaccination"),
-                                vaccination_value = c(Vacc._Random, Vacc._Targeted, No_Vaccination))
-Vaccination_table
+partd <- data.frame(partd_label = c("Vacc. Random", "Vacc. Targeted", "Difference in Infected"),
+                    pard_value = c(Vacc._Random, Vacc._Targeted, Vacc._Random-Vacc._Targeted))
+partd
 ```
 
-This is the number of infected people. When there is no vaccination control then the infected people are the highest (11986). But once the spreading is controlled, the number get lowered as we explained above as 10502 for random selection and 7494 for targeted selection. 
+This is the number of infected people (who get the spreading impact of trust). When there is no vaccination control then the infected people are the highest (12135). But once the spreading is controlled, the number get lowered as we explained above with the number of 10544 for random selection and 7683 for targeted selection. Therefore, here we can identify that when there is no vaccination impact then the spreading amount is the highest. Moreover, when it comes to the vaccinated situation of both random nodes or targeted nodes, then the controlling impact is higher for the targeted nodes network than the randomly selected nodes network. 
 
 ### Explanation for part c (1%) and part d (5%)
 
@@ -238,25 +312,58 @@ print(paste("Total Infected (Random)", total_infected_random))
 print(paste("Total Infected (Targeted)", total_infected_targeted))
 print(paste("Difference in Infected", difference_infected))
 
-partc <- data.frame("partc_label" = c("Total Infected (Random)", "Total Infected (Targeted)", 
+partc <- data.frame("label" = c("Total Infected (Random)", "Total Infected (Targeted)", 
                                           "Difference in Infected"),
-                                "partc_value" = c(total_infected_random, total_infected_targeted, difference_infected))
+                    "partc_value" = c(total_infected_random, total_infected_targeted, difference_infected))
 
-merged_table <- cbind(Vaccination_table, partc)
-merged_table
+merged_table <- cbind(partc, partd) |> select(-"partd_label") |> mutate(difference = partc_value - pard_value)
+
+merged_table 
 ```
 
-With only 1% coverage, random vaccination appears more effective than targeted vaccination, indicating that the targeting strategy might not be optimal or insufficient at this low level. However, at 5% coverage, targeted vaccination drastically reduces the number of infections compared to random vaccination and no vaccination, demonstrating its effectiveness when a sufficient proportion of the network is vaccinated.
+At the part c, 1% of population get selected both randomly and targeted. 
+When it comes to randomly selected population scenario, 12775 people get spread the trust.
+For the targeted population who have the highest closeness centrality scenario, 13193 people get spread the trust.
+Difference between two scenarios is 418.
 
-This comparison emphasizes that while targeted vaccination can be very effective, it requires an adequate level of coverage to identify and protect the most critical nodes in the network. Random vaccination might provide more immediate benefits at very low coverage levels but does not capitalize on the network's structure as effectively as targeted vaccination at higher coverage levels.
+At the part d, 5% of population get selected both randomly and targeted.
+When it comes to randomly selected population scenario, 10544 people get spread the trust. 
+For the targeted population who have the highest closeness centrality scenario, 7683 people get spread the trust
+Difference between two scenarios is 2861. 
+
+From the merged_table, we can identify that when more population is selected, then the impact of control is higher. 
+When it comes to randomly selected population scenario, 2231 people get more spread trust from the part c than the part d.
+For the targeted population who have the highest closeness centrality scenario, 5510 people get more spread trust from the part c than the part d.
+The total difference between each selection is also higher for the part d than the part c by 2443. 
+Therefore, in any cases, we can say when more people (5%) are selected then the controlling or vaccinating impact is higher than the situation that less people (1%) are selected. 
 
 ### Sensor spreading
 
 ```{r}
 all <- table_d %>% group_by(t) %>% summarize(ninf=n())
 sensors <- table_d %>% filter(degree>10) %>% group_by(t) %>% summarize(ninf=n())
-ggplot() + geom_line(data=all,aes(x=t,y=ninf/sum(ninf),col="All")) + geom_line(data=sensors,aes(x=t,y=ninf/sum(ninf),col="Sensors"))
+
+ggplot() + geom_line(data=all,aes(x=t,y=ninf/sum(ninf),col="All")) + geom_line(data=sensors,aes(x=t,y=ninf/sum(ninf),col="Sensors")) +
+   labs(
+    title = "Sensor Spreading Over Time",
+    subtitle = "Comparison Between All and Sensor Data",
+    x = "Time (t)",
+    y = "Normalized Number of Infections",
+    color = "Data Source"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size=14, face="bold"),
+    plot.subtitle = element_text(hjust = 0.5, size=12),
+    axis.title.x = element_text(size=12),
+    axis.title.y = element_text(size=12),
+    legend.position = "bottom"
+  ) +
+  scale_color_manual(values = c("All" = "blue", "Sensors" = "green"))
 ```
+
+This plot shows how different the normalized number of infections distribution is between all nodes and sensors nodes. 
+From the plot we are able to identify that sensor nodes (which have the degree more than 10) would effectively alarm the appearance of the disease or in this case the trust spreading than other all nodes. 
 
 ### neighbor
 
@@ -273,13 +380,36 @@ sensors <- sapply(control,get_one_neighbor)
 ```{r}
 control_evo <- table_d %>% filter(inf %in% control) %>% group_by(t) %>% summarize(ninf=n())
 sensors_evo <- table_d %>% filter(inf %in% sensors) %>% group_by(t) %>% summarize(ninf=n())
+
 ggplot() + geom_line(data=control_evo,aes(x=t,y=cumsum(ninf/sum(ninf)),col="All")) +
-  geom_line(data=sensors_evo,aes(x=t,y=cumsum(ninf/sum(ninf)),col="Sensors")) + labs(y="# infections (cumm)")
+  geom_line(data=sensors_evo,aes(x=t,y=cumsum(ninf/sum(ninf)),col="Sensors")) +
+   labs(
+    title = "Cumulative Infections Over Time",
+    subtitle = "Comparison Between All and Sensor Data",
+    x = "Time (t)",
+    y = "Cumulative Proportion of Infections",
+    color = "Data Source"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size=14, face="bold"),
+    plot.subtitle = element_text(hjust = 0.5, size=12),
+    axis.title.x = element_text(size=12),
+    axis.title.y = element_text(size=12),
+    legend.position = "bottom"
+  ) +
+  scale_color_manual(values = c("All" = "blue", "Sensors" = "green"))
 ```
 
-Control is the random connection and sensors used the friendship paradox which means your friends normally have more friends than you. Therefore, when we have used the sensors proxy then there are more people who got infected than the randomly chosen people. 
+Here, data sources of all and sensors are compared.
+All data is randomly selected nodes. 
+To get the sensor data, we have used the friendship paradox which means your friends normally have more friends than you. 
+When we have used the sensors proxy then there are more people who got infected than the randomly chosen people at the first time period between 0 and 10.
+Therefore, we can conclude that we can use the friendship paradox to get to know how the infection or in this case trust spreading distribution changes over time.
+People who have more friends would be infected or get spread trust earlier and more at the first time period than randomly selected population.  
 
-## Prediction
+# 4. Prediction
+
 ### 1. Linear Regression
 
 ```{r}
@@ -298,6 +428,7 @@ control <- trainControl(method = "cv",  # Use k-fold cross-validation
 
 # Train a regression model
 model <- train(t ~ ., data = train_data, method = "lm", trControl = control)
+
 
 cv_results <- model$results
 cv_results
@@ -343,12 +474,37 @@ RMSE_lm <- data.frame(data = c("train", "test"),
 RMSE_lm
 ```
 
-Even though, we have used the 5-fold cross validation and ridge regularization (L2), the RMSE is still high as 0.87 for the test data set. We consider this happens because the scale of the input data are different so we rather chose random forest which does not require the data scaling. 
+Even though, we have used the 5-fold cross validation and ridge regularization (L2), the RMSE is still high as 1.06 for the test data set. We consider this happens because the scale of the input data are different so we rather chose random forest which does not require the data scaling.
 
 ### 2. Random Forest
 
 ```{r}
+# Install and load the randomForest package
+# install.packages("randomForest")
+library(randomForest)
+
+# Set a seed for reproducibility
+set.seed(123)
+
+# Train the random forest model
+# We use Species as the response variable and all other variables as predictors
+rf_model <- randomForest(t ~ ., data=train_data, importance=TRUE, ntree=50)
+
+# Print the model summary
+print(rf_model)
+
+# Make predictions on the test set
+test_predictions <- predict(rf_model, newdata = test_data)
+
+# Evaluate the model's performance using a confusion matrix
+confusion_matrix <- table(test_data$t, test_predictions)
+
+# Calculate the accuracy
+accuracy <- sum(diag(confusion_matrix)) / sum(confusion_matrix)
+print(paste("Accuracy:", round(accuracy * 100, 2), "%"))
+
+# Plot the importance of variables
+importance(rf_model)
+varImpPlot(rf_model)
 
 ```
-
-
