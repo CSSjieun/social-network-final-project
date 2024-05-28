@@ -45,6 +45,7 @@ sim_sir <- function(g,beta,mu,seeds){
     contacts <- as.numeric(unlist(adjacent_vertices(g,infected))) #get the contacts of infected
     contacts <- contacts[contacts %in% susceptible] # get those who are susceptible
     new_infected <- contacts[runif(length(contacts)) < beta] #infect contacts
+    new_infected <- unique(new_infected) # drop duplicates from the new_infected
     if(length(new_infected)>0){
       state[new_infected] <- 1
       table <- rbind(table,data.frame(t,inf=new_infected))
@@ -70,6 +71,9 @@ node_giant <- V(graph)[cluster$membership == giant_component]
 g <- induced_subgraph(graph, node_giant)
 g
 
+```
+
+```{r}
 plot(g, vertex.label = NA, vertex.size = 3)
 ```
 
@@ -88,9 +92,26 @@ seeds <- sample(1:vcount(g),vcount(g)*0.01)
 
 realization <- sim_sir(g,beta = 0.5,mu=0.1,seeds) %>% 
   group_by(t) %>% summarize(ninf=n()) 
+```
 
+```{r}
 realization %>% 
-  ggplot(aes(x=t,y=ninf)) + geom_line()
+  ggplot(aes(x=t, y=ninf)) + 
+  geom_line(color = "blue", size = 1) + 
+  labs(
+    title = "Number of Infections Over Time",
+    subtitle = "SIR Model Simulation",
+    x = "Time (t)",
+    y = "Number of Infections (ninf)"
+  ) + 
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+    plot.subtitle = element_text(hjust = 0.5, size = 12),
+    axis.title.x = element_text(size = 12),
+    axis.title.y = element_text(size = 12),
+    axis.text = element_text(size = 10)
+  )
 ```
 
 ## plot SIR with several beta
@@ -101,9 +122,27 @@ results <- map_dfr(seq(0,0.2,0.01), # beta range
         realization <- sim_sir(g,beta,mu,seeds) # make a realization for each beta
         data.frame(beta,ninf=nrow(realization)) # create dataframe row
         })
+```
 
-results %>% ggplot(aes(x=beta,y=ninf))+ geom_point()+
-  geom_vline(xintercept = betac,linetype=2) 
+```{r}
+results %>% 
+  ggplot(aes(x=beta, y=ninf)) + 
+  geom_point(color = "blue", size = 1.5) + 
+  geom_vline(xintercept = betac, linetype = "dashed", color = "red", size = 1) + 
+  labs(
+    title = "Number of Infections with Beta Threshold",
+    subtitle = "SIR Model Simulation Results",
+    x = "Transmission Rate (beta)",
+    y = "Number of Infections (ninf)"
+  ) + 
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+    plot.subtitle = element_text(hjust = 0.5, size = 12),
+    axis.title.x = element_text(size = 12),
+    axis.title.y = element_text(size = 12),
+    axis.text = element_text(size = 10)
+  )
 ```
 
 # 3. Centrality Proxies
@@ -118,8 +157,26 @@ realization <- sim_sir(g,beta=0.1,mu=0.1,seeds)
 set.seed(12345)
 table_d <- degree(g) %>% enframe(name = "inf",value="degree") %>%
   merge(realization) 
+
+# Plot
 table_d %>% 
-  ggplot(aes(x=t,y=degree)) + geom_point() + scale_y_log10()
+  ggplot(aes(x = t, y = degree)) + 
+  geom_point(color = "blue", size = 2) + 
+  scale_y_log10() + 
+  labs(
+    title = "Degree Over Time",
+    subtitle = "Log-Scaled Degree Distribution",
+    x = "Time (t)",
+    y = "Degree (log scale)"
+  ) + 
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+    plot.subtitle = element_text(hjust = 0.5, size = 12),
+    axis.title.x = element_text(size = 12),
+    axis.title.y = element_text(size = 12),
+    axis.text = element_text(size = 10)
+  )
 ```
 
 ### closeness
@@ -128,8 +185,26 @@ table_d %>%
 set.seed(12345)
 table_c <- closeness(g) %>% enframe(name = "inf",value="closeness") %>%
   merge(realization) 
+
+# Plot
 table_c %>% 
-  ggplot(aes(x=t,y=closeness)) + geom_point() + scale_y_log10()
+  ggplot(aes(x = t, y = closeness)) + 
+  geom_point(color = "blue", size = 2) + 
+  scale_y_log10() + 
+  labs(
+    title = "Closeness Centrality Over Time",
+    subtitle = "Log-Scaled Closeness Centrality Distribution",
+    x = "Time (t)",
+    y = "Closeness Centrality (log scale)"
+  ) + 
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+    plot.subtitle = element_text(hjust = 0.5, size = 12),
+    axis.title.x = element_text(size = 12),
+    axis.title.y = element_text(size = 12),
+    axis.text = element_text(size = 10)
+  )
 ```
 
 ### betweeness
@@ -138,8 +213,26 @@ table_c %>%
 set.seed(12345)
 table_b <- betweenness(g) %>% enframe(name = "inf",value="betweenness") %>%
   merge(realization) 
+
+# Plot
 table_b %>% 
-  ggplot(aes(x=t,y=betweenness)) + geom_point() + scale_y_log10()
+  ggplot(aes(x = t, y = betweenness)) + 
+  geom_point(color = "blue", size = 2) + 
+  scale_y_log10() + 
+  labs(
+    title = "Betweenness Centrality Over Time",
+    subtitle = "Log-Scaled Betweenness Centrality Distribution",
+    x = "Time (t)",
+    y = "Betweenness Centrality (log scale)"
+  ) + 
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+    plot.subtitle = element_text(hjust = 0.5, size = 12),
+    axis.title.x = element_text(size = 12),
+    axis.title.y = element_text(size = 12),
+    axis.text = element_text(size = 10)
+  )
 ```
 
 ### page rank
@@ -148,12 +241,29 @@ table_b %>%
 set.seed(12345)
 table_pr <- page_rank(g)$vector %>% enframe(name = "inf",value="page_rank") %>%
   merge(realization) 
+
+# Plot
 table_pr %>% 
-  ggplot(aes(x=t,y=page_rank)) + geom_point() + scale_y_log10()
+  ggplot(aes(x = t, y = page_rank)) + 
+  geom_point(color = "blue", size = 2, alpha = 0.6) + 
+  scale_y_log10() + 
+  labs(
+    title = "PageRank Over Time",
+    subtitle = "Log-Scaled PageRank Distribution",
+    x = "Time (t)",
+    y = "PageRank (log scale)"
+  ) + 
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+    plot.subtitle = element_text(hjust = 0.5, size = 12),
+    axis.title.x = element_text(size = 12),
+    axis.title.y = element_text(size = 12),
+    axis.text = element_text(size = 10)
+  )
 ```
 
 ```{r}
-set.seed(12345)
 table <- merge(table_d,table_c)
 table <- merge(table,table_pr)
 table <- merge(table,table_b)
@@ -213,7 +323,7 @@ print(paste("Total Infected (Targeted)", total_infected_targeted))
 print(paste("Difference in Infected", difference_infected))
 ```
 
-Here, we have number of the infected people from random and targeted nodes. Since our data is about the trust, we can interpret that when the nodes are selected randomly, then, the trust spread to 12775 people. If the nodes are selected who have relatively higher centrality than other nodes, then, the trust spread to 13193 people. The difference between two distribution is 418. We can conclude that when nodes have high centrality, trust spreading amount and speed is higher than randomly selected nodes' distribution.
+Here, we have number of the infected people from random and targeted nodes. Since our data is about the trust, we can interpret that when the nodes are selected randomly, then, the trust spread to 4818 people. If the nodes are selected who have relatively higher centrality than other nodes, then, the trust spread to 4846 people. The difference between two distribution is 28 We can conclude that when nodes have high centrality, trust spreading amount and speed is higher than randomly selected nodes' distribution.
 
 ### Vaccinate people not to spread the trust
 
@@ -298,12 +408,14 @@ print(paste("No Vaccination", No_Vaccination))
 print(paste("Vacc. Random", Vacc._Random))
 print(paste("Vacc. Targeted", Vacc._Targeted))
 
-partd <- data.frame(partd_label = c("Vacc. Random", "Vacc. Targeted", "Difference in Infected"),
-                    pard_value = c(Vacc._Random, Vacc._Targeted, Vacc._Random-Vacc._Targeted))
-partd
+partd_w_n_v <- data.frame(partd_label = c("Vacc. Random", "Vacc. Targeted", "Difference in Infected",
+                                          "No Vaccination"),
+                    pard_value = c(Vacc._Random, Vacc._Targeted, Vacc._Random-Vacc._Targeted,
+                                   No_Vaccination))
+partd_w_n_v
 ```
 
-This is the number of infected people (who get the spreading impact of trust). When there is no vaccination control then the infected people are the highest (12135). But once the spreading is controlled, the number get lowered as we explained above with the number of 10544 for random selection and 7683 for targeted selection. Therefore, here we can identify that when there is no vaccination impact then the spreading amount is the highest. Moreover, when it comes to the vaccinated situation of both random nodes or targeted nodes, then the controlling impact is higher for the targeted nodes network than the randomly selected nodes network. 
+This is the number of infected people (who get the spreading impact of trust). When there is no vaccination control then the infected people are the highest (4818). But once the spreading is controlled, the number get lowered as we explained above with the number of 4506 for random selection and 3982 for targeted selection. Therefore, here we can identify that when there is no vaccination impact then the spreading amount is the highest. Moreover, when it comes to the vaccinated situation of both random nodes or targeted nodes, then the controlling impact is higher for the targeted nodes network than the randomly selected nodes network. The difference of trust spread node number between randomly selected nodes' vaccination and targeted nodes' vaccination is 524.  
 
 ### Explanation for part c (1%) and part d (5%)
 
@@ -316,25 +428,27 @@ partc <- data.frame("label" = c("Total Infected (Random)", "Total Infected (Targ
                                           "Difference in Infected"),
                     "partc_value" = c(total_infected_random, total_infected_targeted, difference_infected))
 
+partd <- partd_w_n_v[-4,]
+
 merged_table <- cbind(partc, partd) |> select(-"partd_label") |> mutate(difference = partc_value - pard_value)
 
 merged_table 
 ```
 
 At the part c, 1% of population get selected both randomly and targeted. 
-When it comes to randomly selected population scenario, 12775 people get spread the trust.
-For the targeted population who have the highest closeness centrality scenario, 13193 people get spread the trust.
-Difference between two scenarios is 418.
+When it comes to randomly selected population scenario, 4818 people get spread the trust.
+For the targeted population who have the highest closeness centrality scenario, 4846 people get spread the trust.
+Difference between two scenarios is 28
 
 At the part d, 5% of population get selected both randomly and targeted.
-When it comes to randomly selected population scenario, 10544 people get spread the trust. 
-For the targeted population who have the highest closeness centrality scenario, 7683 people get spread the trust
-Difference between two scenarios is 2861. 
+When it comes to randomly selected population scenario, 4506 people get spread the trust. 
+For the targeted population who have the highest closeness centrality scenario, 3982 people get spread the trust
+Difference between two scenarios is 524 
 
 From the merged_table, we can identify that when more population is selected, then the impact of control is higher. 
-When it comes to randomly selected population scenario, 2231 people get more spread trust from the part c than the part d.
-For the targeted population who have the highest closeness centrality scenario, 5510 people get more spread trust from the part c than the part d.
-The total difference between each selection is also higher for the part d than the part c by 2443. 
+When it comes to randomly selected population scenario, 312 people get more spread trust from the part c than the part d.
+For the targeted population who have the highest closeness centrality scenario, 864 people get more spread trust from the part c than the part d.
+The total difference between each selection is also higher for the part d than the part c by 496 
 Therefore, in any cases, we can say when more people (5%) are selected then the controlling or vaccinating impact is higher than the situation that less people (1%) are selected. 
 
 ### Sensor spreading
@@ -342,7 +456,9 @@ Therefore, in any cases, we can say when more people (5%) are selected then the 
 ```{r}
 all <- table_d %>% group_by(t) %>% summarize(ninf=n())
 sensors <- table_d %>% filter(degree>10) %>% group_by(t) %>% summarize(ninf=n())
+```
 
+```{r}
 ggplot() + geom_line(data=all,aes(x=t,y=ninf/sum(ninf),col="All")) + geom_line(data=sensors,aes(x=t,y=ninf/sum(ninf),col="Sensors")) +
    labs(
     title = "Sensor Spreading Over Time",
@@ -362,7 +478,7 @@ ggplot() + geom_line(data=all,aes(x=t,y=ninf/sum(ninf),col="All")) + geom_line(d
   scale_color_manual(values = c("All" = "blue", "Sensors" = "green"))
 ```
 
-This plot shows how different the normalized number of infections distribution is between all nodes and sensors nodes. 
+This plot shows how different the normalized number of infection distribution is between all nodes and sensors nodes. 
 From the plot we are able to identify that sensor nodes (which have the degree more than 10) would effectively alarm the appearance of the disease or in this case the trust spreading than other all nodes. 
 
 ### neighbor
@@ -380,7 +496,9 @@ sensors <- sapply(control,get_one_neighbor)
 ```{r}
 control_evo <- table_d %>% filter(inf %in% control) %>% group_by(t) %>% summarize(ninf=n())
 sensors_evo <- table_d %>% filter(inf %in% sensors) %>% group_by(t) %>% summarize(ninf=n())
+```
 
+```{r}
 ggplot() + geom_line(data=control_evo,aes(x=t,y=cumsum(ninf/sum(ninf)),col="All")) +
   geom_line(data=sensors_evo,aes(x=t,y=cumsum(ninf/sum(ninf)),col="Sensors")) +
    labs(
@@ -410,35 +528,76 @@ People who have more friends would be infected or get spread trust earlier and m
 
 # 4. Prediction
 
+### Pre-processing the data
+
+```{r}
+# Calculate the quartiles and IQR for each feature
+Q1 <- apply(table[, c(-1,-2)], 2, quantile, probs = 0.25)
+Q3 <- apply(table[, c(-1,-2)], 2, quantile, probs = 0.75)
+IQR <- Q3 - Q1
+
+# Define the lower and upper bounds for outliers
+lower_bound <- Q1 - 1.5 * IQR
+upper_bound <- Q3 + 1.5 * IQR
+
+# Identify outliers for each feature
+outliers <- apply(table[, c(-1,-2)], 2, function(x) x < lower_bound | x > upper_bound)
+
+# Combine the outlier flags across features
+outliers_combined <- apply(outliers, 1, any)
+
+# Remove outliers from the dataset
+data_no_outliers <- table[!outliers_combined, ]
+
+# Check the dimensions of the dataset before and after removing outliers
+dim(table)  # Original dimensions
+dim(data_no_outliers)    # Dimensions after removing outliers
+```
+
+
 ### 1. Linear Regression
 
 ```{r}
-table
-
 # Split the data into training and testing sets
 set.seed(123)
-train_index <- createDataPartition(table$t, p = 0.8, list = FALSE)
-test_data <- table[-train_index, ] |> select(-inf)
+train_index <- createDataPartition(data_no_outliers$t, p = 0.8, list = FALSE)
+test_data <- data_no_outliers[-train_index, ] |> select(-inf)
+train_data <- data_no_outliers[train_index, ] |> select(-inf)
+```
 
-# 5-fold cross validation
-train_data <- table[train_index, ] |> select(-inf)
-
+```{r}
 control <- trainControl(method = "cv",  # Use k-fold cross-validation
-                        number = 5)
+                        number = 100)
 
 # Train a regression model
-model <- train(t ~ ., data = train_data, method = "lm", trControl = control)
+model <- train(t ~ degree + closeness + page_rank + betweenness,
+               data = train_data, method = "lm", trControl = control)
+summary(model)
 
+ggplot(train_data, aes(x = seq(1:50), y = t)) +
+  geom_point(aes(x = degree), color = "blue") +
+  geom_smooth(aes(x = degree), method = "lm", se = FALSE, color = "blue", formula = y ~ x) +
+  geom_point(aes(x = closeness), color = "red") +
+  geom_smooth(aes(x = closeness), method = "lm", se = FALSE, color = "red", formula = y ~ x) +
+  geom_point(aes(x = page_rank), color = "yellow") +
+  geom_smooth(aes(x = page_rank), method = "lm", se = FALSE, color = "yellow", formula = y ~ x) +
+  geom_point(aes(x = betweenness), color = "pink") +
+  geom_smooth(aes(x = betweenness), method = "lm", se = FALSE, color = "pink", formula = y ~ x) +
+  labs(title = "Regression Lines for Different Features",
+       x = "Sequence (1 to 50)",
+       y = "t") +
+  theme_minimal()
+  
+```
 
+```{r}
 cv_results <- model$results
 cv_results
 ```
 
-Since the RMSE is too high, we have used the ridge regularization (L2 regularization).
-
 ```{r}
 x <- as.matrix(train_data[,-1])
-y <- train_data$t
+y <- train_data_standardized$t
 
 control <- trainControl(method = "repeatedcv", number = 10, repeats = 5)
 
@@ -453,58 +612,165 @@ best_tune <- ridge_model$bestTune
 best_tune
 ```
 
+Since the RMSE is too high, we have used the ridge regularization (L2 regularization).
+
 ```{r}
 prediciton <- predict(ridge_model, newdata = x)
 sqrt(mean((prediciton - y)^2))
 ```
 
 ```{r}
-# Evaluate the model on the test data
-predictions_t <- predict(ridge_model, newdata = train_data)
-rmse <- sqrt(mean((predictions_t - train_data$t)^2))
-print(paste("RMSE on test data:", rmse))
+# RMSE Calculation for Ridge Regression
+predictions_train <- predict(ridge_model, newdata = x)
+rmse_train <- sqrt(mean((predictions_train - y)^2))
+print(paste("RMSE on train data (Ridge):", rmse_train))
 
-predictions <- predict(ridge_model, newdata = test_data)
-rmse <- sqrt(mean((predictions - test_data$t)^2))
-print(paste("RMSE on test data:", rmse))
+# RMSE Calculation for Test Data
+predictions_test <- predict(ridge_model, newdata = test_data)
+rmse_test <- sqrt(mean((predictions_test - test_data$t)^2))
+print(paste("RMSE on test data (Ridge):", rmse_test))
 
-RMSE_lm <- data.frame(data = c("train", "test"), 
-                      RMSE = c(sqrt(mean((predictions_t - train_data$t)^2)), 
-                               sqrt(mean((predictions - test_data$t)^2))))
-RMSE_lm
+# Data Frame with RMSE Values
+RMSE_ridge <- data.frame(data = c("train", "test"), 
+                         RMSE = c(rmse_train, rmse_test))
+RMSE_ridge
+
 ```
 
-Even though, we have used the 5-fold cross validation and ridge regularization (L2), the RMSE is still high as 1.06 for the test data set. We consider this happens because the scale of the input data are different so we rather chose random forest which does not require the data scaling.
+Even though, we have used the 5-fold cross validation and ridge regularization (L2), the RMSE is still high as 3.63 for the test data set. We consider this happens because the scale of the input data are different. 
 
-### 2. Random Forest
+### Use that model to select the seed nodes as those with the smallest time to infection in part c)
 
 ```{r}
-# Install and load the randomForest package
-# install.packages("randomForest")
-library(randomForest)
+set.seed(12345)
+seeds <- sample(1:vcount(g),vcount(g)*0.01)
 
-# Set a seed for reproducibility
-set.seed(123)
+# Find the smallest time to infection nodes
+smallest_time_nodes <- table[order(predictions), ][1:seeds, ]
 
-# Train the random forest model
-# We use Species as the response variable and all other variables as predictors
-rf_model <- randomForest(t ~ ., data=train_data, importance=TRUE, ntree=50)
+smallest_time_nodes <- smallest_time_nodes |> drop_na()
 
-# Print the model summary
-print(rf_model)
+cor(smallest_time_nodes$t,smallest_time_nodes[,-c(1,2)])
 
-# Make predictions on the test set
-test_predictions <- predict(rf_model, newdata = test_data)
+# Extract node IDs from smallest_time_nodes
+seed_nodes <- smallest_time_nodes$inf
 
-# Evaluate the model's performance using a confusion matrix
-confusion_matrix <- table(test_data$t, test_predictions)
+# Convert node IDs to indices
+seed_indices <- match(seed_nodes, V(g))
 
-# Calculate the accuracy
-accuracy <- sum(diag(confusion_matrix)) / sum(confusion_matrix)
-print(paste("Accuracy:", round(accuracy * 100, 2), "%"))
+# Pass seed indices to sim_sir function
+realization_random <- sim_sir(g, beta = 0.5, mu = 0.1, seeds = seed_indices) %>%
+  group_by(t) %>% summarize(ninf = n())
+```
 
-# Plot the importance of variables
-importance(rf_model)
-varImpPlot(rf_model)
+```{r}
+set.seed(12345)
+seeds <- closeness(g) %>% enframe(name = "inf",value="closeness") %>%
+  slice_max(closeness,n=round(vcount(g)*0.01,0))
+
+seeds_inf <- seeds$inf
+seeds_inf <- as.integer(seeds_inf)
+all(seeds_inf %in% V(g)) 
+
+realization_targeted <- sim_sir(g,beta = 0.5,mu=0.1,seeds_inf) %>%
+  group_by(t) %>% summarize(ninf=n())
+
+ggplot() + geom_line(data=realization_random,aes(x=t,y=ninf,col="Random"))+
+  geom_line(data=realization_targeted,aes(x=t,y=ninf,col="Targeted")) +
+  labs(
+    title = "Comparison of Infections Over Time",
+    subtitle = "Random vs. Targeted",
+    x = "Time (t)",
+    y = "Number of Trust Spreading (ninf)",
+    color = NULL
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size=14, face="bold"),
+    plot.subtitle = element_text(hjust = 0.5, size=12),
+    axis.title.x = element_text(size=12),
+    axis.title.y = element_text(size=12),
+    legend.position = "bottom"
+  ) +
+  scale_color_manual(values = c("Random" = "blue", "Targeted" = "red"))
+```
+
+```{r}
+total_infected_random <- sum(realization_random$ninf)
+total_infected_targeted <- sum(realization_targeted$ninf)
+difference_infected <- total_infected_targeted - total_infected_random
+
+print(paste("Total Infected (Random)", total_infected_random))
+print(paste("Total Infected (Targeted)", total_infected_targeted))
+print(paste("Difference in Infected", difference_infected))
+```
+
+
+### 5%
+
+```{r}
+set.seed(12345)
+seeds <- sample(1:vcount(g),vcount(g)*0.05)
+
+# Find the smallest time to infection nodes
+smallest_time_nodes <- table[order(predictions), ][1:seeds, ]
+
+smallest_time_nodes <- smallest_time_nodes |> drop_na()
+
+cor(smallest_time_nodes$t,smallest_time_nodes[,-c(1,2)])
+
+# Extract node IDs from smallest_time_nodes
+seed_nodes <- smallest_time_nodes$inf
+
+# Convert node IDs to indices
+seed_indices <- match(seed_nodes, V(g))
+
+seeds_inf <- seeds$inf
+seeds_inf <- as.integer(seeds_inf)
+all(seeds_inf %in% V(g)) 
+
+realization_random <- sim_sir(g, beta = 0.5, mu = 0.1, seeds = seed_indices) %>%
+  group_by(t) %>% summarize(ninf = n())
+
+seeds <- closeness(g) %>% enframe(name = "inf",value="closeness") %>%
+  slice_max(closeness,n=round(vcount(g)*0.05,0))
+gp <- delete_vertices(g,seeds_inf)
+realization_targeted <- sim_sir(gp,beta = 0.5,mu=0.1,seeds_inf) %>%
+  group_by(t) %>% summarize(ninf=n())
+
 
 ```
+
+```{r}
+No_Vaccination <- sum(realization$ninf)
+Vacc._Random <- sum(realization_random$ninf)
+Vacc._Targeted <- sum(realization_targeted$ninf)
+
+print(paste("No Vaccination", No_Vaccination))
+print(paste("Vacc. Random", Vacc._Random))
+print(paste("Vacc. Targeted", Vacc._Targeted))
+
+partd_w_n_v <- data.frame(partd_label = c("Vacc. Random", "Vacc. Targeted", "Difference in Infected",
+                                          "No Vaccination"),
+                    pard_value = c(Vacc._Random, Vacc._Targeted, Vacc._Random-Vacc._Targeted,
+                                   No_Vaccination))
+partd_w_n_v
+```
+
+```{r}
+print(paste("Total Infected (Random)", total_infected_random))
+print(paste("Total Infected (Targeted)", total_infected_targeted))
+print(paste("Difference in Infected", difference_infected))
+
+partc <- data.frame("label" = c("Total Infected (Random)", "Total Infected (Targeted)", 
+                                          "Difference in Infected"),
+                    "partc_value" = c(total_infected_random, total_infected_targeted, difference_infected))
+
+partd <- partd_w_n_v[-4,]
+
+merged_table <- cbind(partc, partd) |> select(-"partd_label") |> mutate(difference = partc_value - pard_value)
+
+merged_table 
+```
+
+
