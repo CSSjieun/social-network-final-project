@@ -600,8 +600,9 @@ cv_results
 ```
 
 ```{r}
+set.seed(123)
 x <- as.matrix(train_data[,-1])
-y <- train_data_standardized$t
+y <- train_data$t
 
 control <- trainControl(method = "repeatedcv", number = 10, repeats = 5)
 
@@ -638,7 +639,6 @@ print(paste("RMSE on test data (Ridge):", rmse_test))
 RMSE_ridge <- data.frame(data = c("train", "test"), 
                          RMSE = c(rmse_train, rmse_test))
 RMSE_ridge
-
 ```
 
 Even though, we have used the 5-fold cross validation and ridge regularization (L2), the RMSE is still high as 3.63 for the test data set. We consider this happens because the scale of the input data are different. 
