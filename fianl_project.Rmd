@@ -286,7 +286,9 @@ all(seeds_inf %in% V(g))
 
 realization_targeted <- sim_sir(g,beta = 0.5,mu=0.1,seeds_inf) %>%
   group_by(t) %>% summarize(ninf=n())
+```
 
+```{r}
 ggplot() + geom_line(data=realization_random,aes(x=t,y=ninf,col="Random"))+
   geom_line(data=realization_targeted,aes(x=t,y=ninf,col="Targeted")) +
   labs(
@@ -573,7 +575,9 @@ control <- trainControl(method = "cv",  # Use k-fold cross-validation
 model <- train(t ~ degree + closeness + page_rank + betweenness,
                data = train_data, method = "lm", trControl = control)
 summary(model)
+```
 
+```{r}
 ggplot(train_data, aes(x = seq(1:50), y = t)) +
   geom_point(aes(x = degree), color = "blue") +
   geom_smooth(aes(x = degree), method = "lm", se = FALSE, color = "blue", formula = y ~ x) +
@@ -638,6 +642,70 @@ RMSE_ridge
 ```
 
 Even though, we have used the 5-fold cross validation and ridge regularization (L2), the RMSE is still high as 3.63 for the test data set. We consider this happens because the scale of the input data are different. 
+
+
+### 2. Random Forest
+
+```{r}
+### 2. Random Forest
+# install.packages("randomForest")
+library(randomForest)
+test_data <- table[-train_index, ] 
+train_control <- trainControl(
+  method = "cv", 
+  number = 5,
+  savePredictions = TRUE
+)
+
+# Train the random forest model
+set.seed(123)
+rf_model <- train(
+  t ~ ., 
+  data = train_data, 
+  method = "ranger",
+  trControl = train_control,
+  tuneLength = 5,
+  metric = "RMSE"
+)
+
+test_predictions <- predict(rf_model, newdata = test_data)
+
+test_results <- test_data %>%
+  mutate(predictions = test_predictions)
+
+
+rmse_value <- RMSE(test_results$predictions, test_results$t)
+rsq_value <- R2(test_results$predictions, test_results$t)
+
+cat("Test RMSE:", rmse_value, "\n")
+cat("Test R-squared:", rsq_value, "\n")
+```
+
+As shown in the results above, employing the random forest method has led to a significant improvement in the RMSE, bringing it down to 0.4517. This indicates a better fit for our predictions, with the deviations from the actual values averaging 0.4517 units. Additionally, we achieved an R-squared value of 0.6934, meaning that 69.34% of the variability in the time to infection is explained by the model's predictors.
+
+```{r}
+# Using RF model to repeat d)
+
+Selecting the nodes based on the RF predicted time of infection 
+
+# Select nodes with the smallest predicted time to infection (top 5% of nodes)
+num_seeds <- round(vcount(g) * 0.05)
+seed_nodes <- test_results %>%
+  arrange(predictions) %>%
+  slice_head(n = num_seeds) %>%
+  pull(inf) # Assuming 'name' column has node IDs
+
+# Step 3: Simulate the SIR model
+gp2 <- delete_vertices(g, seed_nodes)
+remaining_seeds <- sample(1:vcount(gp2), vcount(gp2) * 0.01)
+realization_targeted <- sim_sir(gp2, beta = 0.5, mu = 0.1, seeds = remaining_seeds) %>%
+  group_by(t) %>%
+  summarize(ninf = n())
+
+# Print the results
+print(realization_targeted)
+```
+
 
 ### Use that model to select the seed nodes as those with the smallest time to infection in part c)
 
