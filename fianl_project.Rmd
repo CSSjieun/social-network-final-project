@@ -642,8 +642,7 @@ RMSE_ridge <- data.frame(data = c("train", "test"),
 RMSE_ridge
 ```
 
-Even though, we have used the 5-fold cross validation and ridge regularization (L2), the RMSE is still high as 3.63 for the test data set. We consider this happens because the scale of the input data are different. 
-
+Even though, we have used the 5-fold cross validation and ridge regularization (L2), the RMSE is still high as about 3.40 for the test data set. We consider this happens because the scale of the input data are different. 
 
 ### 2. Random Forest
 
@@ -674,27 +673,105 @@ test_predictions <- predict(rf_model, newdata = test_data)
 test_results <- test_data %>%
   mutate(predictions = test_predictions)
 
-
 rmse_value <- RMSE(test_results$predictions, test_results$t)
-rsq_value <- R2(test_results$predictions, test_results$t)
 
 cat("Test RMSE:", rmse_value, "\n")
-cat("Test R-squared:", rsq_value, "\n")
 ```
 
-As shown in the results above, employing the random forest method has led to a significant improvement in the RMSE, bringing it down to 0.4517. This indicates a better fit for our predictions, with the deviations from the actual values averaging 0.4517 units. Additionally, we achieved an R-squared value of 0.6934, meaning that 69.34% of the variability in the time to infection is explained by the model's predictors.
+As shown in the results above, employing the random forest method has led to a significant improvement in the RMSE, bringing it down to about 3.10. This indicates a better fit for our predictions, with the deviations from the actual values averaging 3.10 units. 
 
 # Using RF model to repeat d)
-Selecting the nodes based on the RF predicted time of infection 
+Selecting the nodes based on the RF predicted time of infection.
+
+### c) with the prediction model (1%)
+### Random-realization
+
+```{r}
+set.seed(123)
+seeds <- ceiling(nrow(table) * 0.01)
+seed_nodes <- test_results %>% arrange(predictions) %>% slice_head(n = num_seeds)
+
+seeds_inf <- seed_nodes$inf
+seeds_inf <- as.integer(seeds_inf)
+all(seeds_inf %in% V(g)) 
+
+realization_random <- sim_sir(g,beta = 0.5,mu=0.1,seeds_inf) %>%
+  group_by(t) %>% summarize(ninf=n())
+```
+
+### Targeted-realization
+
+```{r}
+set.seed(123)
+
+closeness_centrality <- closeness(g)
+
+# Convert closeness centrality to a tibble
+closeness_df <- enframe(closeness_centrality, name = "inf", value = "closeness")
+
+# Merge closeness centrality with test results based on 'inf'
+merged_df <- closeness_df %>%
+  left_join(test_results, by = "inf")
+
+# Select the top nodes based on closeness centrality
+num_seeds <- round(vcount(g) * 0.01)
+seed_nodes <- merged_df %>%
+  arrange(predictions) %>%
+  slice_head(n = num_seeds) %>%
+  pull(inf)
+
+realization_targeted <- sim_sir(g,beta = 0.5,mu=0.1,seeds_inf) %>%
+  group_by(t) %>% summarize(ninf=n())
+
+# Print the seed nodes and the result of the SIR simulation
+print(realization_targeted)
+```
+
+
+```{r}
+total_infected_random <- sum(realization_random$ninf)
+total_infected_targeted <- sum(realization_targeted$ninf)
+difference_infected <- total_infected_targeted - total_infected_random
+
+print(paste("Total Infected (Random)", total_infected_random))
+print(paste("Total Infected (Targeted)", total_infected_targeted))
+print(paste("Difference in Infected", difference_infected))
+```
+
+```{r}
+ggplot() + geom_line(data=realization_random,aes(x=t,y=ninf,col="Random"))+
+  geom_line(data=realization_targeted,aes(x=t,y=ninf,col="Targeted")) +
+  labs(
+    title = "Comparison of Infections Over Time",
+    subtitle = "Random vs. Targeted",
+    x = "Time (t)",
+    y = "Number of Trust Spreading (ninf)",
+    color = NULL
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size=14, face="bold"),
+    plot.subtitle = element_text(hjust = 0.5, size=12),
+    axis.title.x = element_text(size=12),
+    axis.title.y = element_text(size=12),
+    legend.position = "bottom"
+  ) +
+  scale_color_manual(values = c("Random" = "blue", "Targeted" = "red"))
+```
+
+The SIR model distribution was plotted with the random and targeted nodes using the results of the random forest model that predicts time of infection of a node using different centrality measures. As on part b), we've chosen the 'closeness' centrality that has the highest correlation with the time.
+
+From the plot, we notice that targeted users which have higher closeness centrality value get trust propagation faster than random nodes, suggesting that targeting the nodes can lead to a more fast and intense spread of trust, which can also be controlled and reduced more quickly. On the other hand, random trust propagation spreads more slowly and has a more prolonged impact.
+
 
 ### 5%
 ### Random-realization
 
 ```{r}
-set.seed(12345)
+set.seed(123)
 
 # Select nodes with the smallest predicted time to infection (top 5% of nodes)
-num_seeds <- sample(1:vcount(g),vcount(g)*0.01)
+num_seeds <- ceiling(nrow(table)*0.01)
 seed_nodes <- test_results %>%
   arrange(predictions) %>%
   slice_head(n = num_seeds) %>%
@@ -708,23 +785,37 @@ realization_random <- sim_sir(gp,beta = 0.5,mu=0.1,seeds) |> group_by(t) |> summ
 ### Targeted-realization
 
 ```{r}
-set.seed(12345)
-
+set.seed(123)
+# Calculate closeness centrality for all nodes
 closeness_centrality <- closeness(g)
 
 # Convert closeness centrality to a tibble
 closeness_df <- enframe(closeness_centrality, name = "inf", value = "closeness")
 
-# Select the top nodes based on closeness centrality
+# Merge closeness centrality with test results based on 'inf'
+merged_df <- closeness_df %>%
+  left_join(test_results, by = "inf")
+
+# Select the top nodes based on predictions and then by closeness centrality
 num_seeds <- round(vcount(g) * 0.05)
-seed_nodes <- closeness_df %>%
-  slice_max(closeness, n = num_seeds) %>%
+seed_nodes <- merged_df %>%
+  arrange(predictions) %>%
+  slice_head(n = num_seeds) %>%
   pull(inf)
 
-gp <- delete_vertices(g,seed_nodes)
-seeds <- sample(1:vcount(gp),vcount(gp)*0.01)
-realization_targeted <- sim_sir(gp,beta = 0.5,mu=0.1,seeds) %>%
-  group_by(t) %>% summarize(ninf=n())
+# Remove seed nodes from the graph
+gp <- delete_vertices(g, seed_nodes)
+
+# Select a sample of seeds from the remaining nodes
+seeds <- sample(1:vcount(gp), vcount(gp) * 0.01)
+
+# Simulate SIR process
+realization_targeted <- sim_sir(gp, beta = 0.5, mu = 0.1, seeds) %>%
+  group_by(t) %>%
+  summarize(ninf = n())
+
+# Print the seed nodes and the result of the SIR simulation
+print(realization_targeted)
 ```
 
 ```{r}
@@ -747,6 +838,8 @@ ggplot() +
   ) +
     scale_color_manual(values = c("Vacc. Random" = "red", "Vacc. Targeted" = "green"))
 ```
+
+
 
 ```{r}
 Vacc._Random <- sum(realization_random$ninf)
