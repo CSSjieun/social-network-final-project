@@ -1,6 +1,6 @@
 ---
 title: "Final project"
-author: "Jieun Park"
+author: "Jieun Park, Valeria Contreras"
 date: "`r Sys.Date()`"
 output:
   html_document:
@@ -688,7 +688,7 @@ Selecting the nodes based on the RF predicted time of infection.
 
 ```{r}
 set.seed(123)
-seeds <- ceiling(nrow(table) * 0.01)
+num_seeds <- ceiling(nrow(table) * 0.01)
 seed_nodes <- test_results %>% arrange(predictions) %>% slice_head(n = num_seeds)
 
 seeds_inf <- seed_nodes$inf
@@ -765,7 +765,7 @@ ggplot() + geom_line(data=realization_random,aes(x=t,y=ninf,col="Random"))+
 
 The SIR model distribution was plotted with the random and targeted nodes using the results of the random forest model that predicts time of infection of a node using different centrality measures. As on part c), we've chosen the 'closeness' centrality that has the highest correlation with the time.
 
-From the plot and the result table, we notice that the distribution is same for both randomly selected and targeted nodes. We assume that this happens because when we only select 1% of the population, the centrality proxy do not affect the infection distribution a lot. Next, we will investigate how the vaccination impact would be performed for the 5% population scenario. 
+From the plot and the result table, we notice that the distribution is 4832 for the randomly selected nodes and 4819 for the targeted nodes. The difference between two trust spread users is about 13. Even though the difference is subtle, we can identify that there are more users from the randomly selected nodes from the 1% trust spreading comparison. We can conclude that when there are not too many nodes (people) in the network, then the centrality proxy do not affect a lot for the spreading distribution.  
 
 ### 5%
 ### Random-realization
@@ -865,7 +865,7 @@ merged_table_prediction_model <- cbind(partc_w_n_v, partd_w_n_v)
 merged_table_prediction_model 
 ```
 
-As we can see on the above table, in part c, there is no difference of infection distribution between randomly selected nodes and the targeted nodes. However, in part d, the random selection was higher with 4768 users influenced compared to 4422 for targeted selection, a decrease of 346 users. The difference between part c and part d indicates when there is more population, then the targeted nodes (people) have more power in the trust spreading situation. 
+As we can see on the above table, in part c, there are 4832 users from randomly selected nodes network and 4819 users from targeted nodes network. The difference between two figures is 13. This shows when there is only 1% of the people, then trust spreading is more higher for the randomly selected nodes network than the targeted nodes. However, in part d, the random selection was higher with 4768 users who got spread of trust compared to 4422 for targeted selection, a decrease of 346 users. The difference between part c and part d indicates when there is more population, then the targeted nodes (people) have more power in the trust spreading situation. 
 
 Therefore, we can conclude that first, when there are more population, then the power of the people who have the higher centrality value gets amplified. Second, in the same vein, convincing 5% of users, which is more people than the 1% users, in the network not to spread information at all might be more beneficial in scenarios where controlling the spread is crucial.
 
