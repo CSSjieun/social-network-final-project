@@ -736,6 +736,10 @@ difference_infected <- total_infected_targeted - total_infected_random
 print(paste("Total Infected (Random)", total_infected_random))
 print(paste("Total Infected (Targeted)", total_infected_targeted))
 print(paste("Difference in Infected", difference_infected))
+
+partc_w_n_v <- data.frame(partc_label = c("Random", "Targeted", "Difference in Infected"),
+                    pard_value = c(total_infected_random, total_infected_targeted, difference_infected))
+partc_w_n_v
 ```
 
 ```{r}
@@ -759,10 +763,9 @@ ggplot() + geom_line(data=realization_random,aes(x=t,y=ninf,col="Random"))+
   scale_color_manual(values = c("Random" = "blue", "Targeted" = "red"))
 ```
 
-The SIR model distribution was plotted with the random and targeted nodes using the results of the random forest model that predicts time of infection of a node using different centrality measures. As on part b), we've chosen the 'closeness' centrality that has the highest correlation with the time.
+The SIR model distribution was plotted with the random and targeted nodes using the results of the random forest model that predicts time of infection of a node using different centrality measures. As on part c), we've chosen the 'closeness' centrality that has the highest correlation with the time.
 
-From the plot, we notice that targeted users which have higher closeness centrality value get trust propagation faster than random nodes, suggesting that targeting the nodes can lead to a more fast and intense spread of trust, which can also be controlled and reduced more quickly. On the other hand, random trust propagation spreads more slowly and has a more prolonged impact.
-
+From the plot and the result table, we notice that the distribution is same for both randomly selected and targeted nodes. We assume that this happens because when we only select 1% of the population, the centrality proxy do not affect the infection distribution a lot. Next, we will investigate how the vaccination impact would be performed for the 5% population scenario. 
 
 ### 5%
 ### Random-realization
@@ -819,6 +822,18 @@ print(realization_targeted)
 ```
 
 ```{r}
+Vacc._Random <- sum(realization_random$ninf)
+Vacc._Targeted <- sum(realization_targeted$ninf)
+
+print(paste("Vacc. Random", Vacc._Random))
+print(paste("Vacc. Targeted", Vacc._Targeted))
+
+partd_w_n_v <- data.frame(partd_label = c("Vacc. Random", "Vacc. Targeted", "Difference in Infected"),
+                    pard_value = c(Vacc._Random, Vacc._Targeted, Vacc._Random-Vacc._Targeted))
+partd_w_n_v
+```
+
+```{r}
 ggplot() + 
   geom_line(data=realization_random,aes(x=t,y=ninf,col="Vacc. Random"))+
   geom_line(data=realization_targeted,aes(x=t,y=ninf,col="Vacc. Targeted")) +
@@ -839,35 +854,19 @@ ggplot() +
     scale_color_manual(values = c("Vacc. Random" = "red", "Vacc. Targeted" = "green"))
 ```
 
-
-
-```{r}
-Vacc._Random <- sum(realization_random$ninf)
-Vacc._Targeted <- sum(realization_targeted$ninf)
-
-print(paste("Vacc. Random", Vacc._Random))
-print(paste("Vacc. Targeted", Vacc._Targeted))
-
-partd_w_n_v <- data.frame(partd_label = c("Vacc. Random", "Vacc. Targeted", "Difference in Infected"),
-                    pard_value = c(Vacc._Random, Vacc._Targeted, Vacc._Random-Vacc._Targeted))
-partd_w_n_v
-```
+This is the replication of part d which shows the vaccination impact on the network for the trust spread. Here, we can clearly examine that targeted node get higher influence of vaccination than the randomly selected nodes. From the plot and the result table, targeted nodes get spread the trust as about 4422 and randomly selected nodes get spread the trust as about 4768. The difference between two values are 346. We can visually identify this difference. Therefore, we can conclude that when the targeted nodes which is selected by the closeness centrality proxy get vaccinated, then the impact of the vaccination is higher than on randomly selected nodes. Therefore, when we want to efficiently reduce the amount of the trust spread, then we need to control mainly targeted nodes first.
 
 
 ### Explanation for part c (1%) and part d (5%) 
 
 ```{r}
-print(paste("Total Infected (Random)", total_infected_random))
-print(paste("Total Infected (Targeted)", total_infected_targeted))
-print(paste("Difference in Infected", difference_infected))
+merged_table_prediction_model <- cbind(partc_w_n_v, partd_w_n_v) 
 
-partc <- data.frame("label" = c("Total Infected (Random)", "Total Infected (Targeted)", 
-                                          "Difference in Infected"),
-                    "partc_value" = c(total_infected_random, total_infected_targeted, difference_infected))
-
-partd <- partd_w_n_v[-4,]
-
-merged_table <- cbind(partc, partd) |> select(-"partd_label") |> mutate(difference = partc_value - pard_value)
-
-merged_table 
+merged_table_prediction_model 
 ```
+
+As we can see on the above table, in part c, there is no difference of infection distribution between randomly selected nodes and the targeted nodes. However, in part d, the random selection was higher with 4768 users influenced compared to 4422 for targeted selection, a decrease of 346 users. The difference between part c and part d indicates when there is more population, then the targeted nodes (people) have more power in the trust spreading situation. 
+
+Therefore, we can conclude that first, when there are more population, then the power of the people who have the higher centrality value gets amplified. Second, in the same vein, convincing 5% of users, which is more people than the 1% users, in the network not to spread information at all might be more beneficial in scenarios where controlling the spread is crucial.
+
+
