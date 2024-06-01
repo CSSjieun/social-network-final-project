@@ -568,6 +568,7 @@ train_data <- data_no_outliers[train_index, ] |> select(-inf)
 ```
 
 ```{r}
+set.seed(123)
 control <- trainControl(method = "cv",  # Use k-fold cross-validation
                         number = 100)
 
@@ -683,147 +684,84 @@ cat("Test R-squared:", rsq_value, "\n")
 
 As shown in the results above, employing the random forest method has led to a significant improvement in the RMSE, bringing it down to 0.4517. This indicates a better fit for our predictions, with the deviations from the actual values averaging 0.4517 units. Additionally, we achieved an R-squared value of 0.6934, meaning that 69.34% of the variability in the time to infection is explained by the model's predictors.
 
-```{r}
 # Using RF model to repeat d)
-
 Selecting the nodes based on the RF predicted time of infection 
 
+### 5%
+### Random-realization
+
+```{r}
+set.seed(12345)
+
 # Select nodes with the smallest predicted time to infection (top 5% of nodes)
-num_seeds <- round(vcount(g) * 0.05)
+num_seeds <- sample(1:vcount(g),vcount(g)*0.01)
 seed_nodes <- test_results %>%
   arrange(predictions) %>%
   slice_head(n = num_seeds) %>%
   pull(inf) # Assuming 'name' column has node IDs
 
-# Step 3: Simulate the SIR model
-gp2 <- delete_vertices(g, seed_nodes)
-remaining_seeds <- sample(1:vcount(gp2), vcount(gp2) * 0.01)
-realization_targeted <- sim_sir(gp2, beta = 0.5, mu = 0.1, seeds = remaining_seeds) %>%
-  group_by(t) %>%
-  summarize(ninf = n())
-
-# Print the results
-print(realization_targeted)
+gp <- delete_vertices(g,seed_nodes)
+seeds <- sample(1:vcount(gp),vcount(gp)*0.01)
+realization_random <- sim_sir(gp,beta = 0.5,mu=0.1,seeds) |> group_by(t) |> summarize(ninf=n())
 ```
 
-
-### Use that model to select the seed nodes as those with the smallest time to infection in part c)
+### Targeted-realization
 
 ```{r}
 set.seed(12345)
-seeds <- sample(1:vcount(g),vcount(g)*0.01)
 
-# Find the smallest time to infection nodes
-smallest_time_nodes <- table[order(predictions), ][1:seeds, ]
+closeness_centrality <- closeness(g)
 
-smallest_time_nodes <- smallest_time_nodes |> drop_na()
+# Convert closeness centrality to a tibble
+closeness_df <- enframe(closeness_centrality, name = "inf", value = "closeness")
 
-cor(smallest_time_nodes$t,smallest_time_nodes[,-c(1,2)])
+# Select the top nodes based on closeness centrality
+num_seeds <- round(vcount(g) * 0.05)
+seed_nodes <- closeness_df %>%
+  slice_max(closeness, n = num_seeds) %>%
+  pull(inf)
 
-# Extract node IDs from smallest_time_nodes
-seed_nodes <- smallest_time_nodes$inf
-
-# Convert node IDs to indices
-seed_indices <- match(seed_nodes, V(g))
-
-# Pass seed indices to sim_sir function
-realization_random <- sim_sir(g, beta = 0.5, mu = 0.1, seeds = seed_indices) %>%
-  group_by(t) %>% summarize(ninf = n())
-```
-
-```{r}
-set.seed(12345)
-seeds <- closeness(g) %>% enframe(name = "inf",value="closeness") %>%
-  slice_max(closeness,n=round(vcount(g)*0.01,0))
-
-seeds_inf <- seeds$inf
-seeds_inf <- as.integer(seeds_inf)
-all(seeds_inf %in% V(g)) 
-
-realization_targeted <- sim_sir(g,beta = 0.5,mu=0.1,seeds_inf) %>%
+gp <- delete_vertices(g,seed_nodes)
+seeds <- sample(1:vcount(gp),vcount(gp)*0.01)
+realization_targeted <- sim_sir(gp,beta = 0.5,mu=0.1,seeds) %>%
   group_by(t) %>% summarize(ninf=n())
+```
 
-ggplot() + geom_line(data=realization_random,aes(x=t,y=ninf,col="Random"))+
-  geom_line(data=realization_targeted,aes(x=t,y=ninf,col="Targeted")) +
-  labs(
-    title = "Comparison of Infections Over Time",
-    subtitle = "Random vs. Targeted",
+```{r}
+ggplot() + 
+  geom_line(data=realization_random,aes(x=t,y=ninf,col="Vacc. Random"))+
+  geom_line(data=realization_targeted,aes(x=t,y=ninf,col="Vacc. Targeted")) +
+  theme_minimal() + labs(
+    color = "Vaccination Strategy",  # Set the legend title for the color aesthetic
+    title = "Comparison of Trust Spread Over Time",
+    subtitle = "Random Vaccination vs. Targeted Vaccination",
     x = "Time (t)",
-    y = "Number of Trust Spreading (ninf)",
-    color = NULL
+    y = "Number of trust spread (ninf)"
   ) +
-  theme_minimal() +
   theme(
-    plot.title = element_text(hjust = 0.5, size=14, face="bold"),
-    plot.subtitle = element_text(hjust = 0.5, size=12),
-    axis.title.x = element_text(size=12),
-    axis.title.y = element_text(size=12),
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+    plot.subtitle = element_text(hjust = 0.5, size = 12),
+    axis.title.x = element_text(size = 12),
+    axis.title.y = element_text(size = 12),
     legend.position = "bottom"
   ) +
-  scale_color_manual(values = c("Random" = "blue", "Targeted" = "red"))
+    scale_color_manual(values = c("Vacc. Random" = "red", "Vacc. Targeted" = "green"))
 ```
 
 ```{r}
-total_infected_random <- sum(realization_random$ninf)
-total_infected_targeted <- sum(realization_targeted$ninf)
-difference_infected <- total_infected_targeted - total_infected_random
-
-print(paste("Total Infected (Random)", total_infected_random))
-print(paste("Total Infected (Targeted)", total_infected_targeted))
-print(paste("Difference in Infected", difference_infected))
-```
-
-
-### 5%
-
-```{r}
-set.seed(12345)
-seeds <- sample(1:vcount(g),vcount(g)*0.05)
-
-# Find the smallest time to infection nodes
-smallest_time_nodes <- table[order(predictions), ][1:seeds, ]
-
-smallest_time_nodes <- smallest_time_nodes |> drop_na()
-
-cor(smallest_time_nodes$t,smallest_time_nodes[,-c(1,2)])
-
-# Extract node IDs from smallest_time_nodes
-seed_nodes <- smallest_time_nodes$inf
-
-# Convert node IDs to indices
-seed_indices <- match(seed_nodes, V(g))
-
-seeds_inf <- seeds$inf
-seeds_inf <- as.integer(seeds_inf)
-all(seeds_inf %in% V(g)) 
-
-realization_random <- sim_sir(g, beta = 0.5, mu = 0.1, seeds = seed_indices) %>%
-  group_by(t) %>% summarize(ninf = n())
-
-seeds <- closeness(g) %>% enframe(name = "inf",value="closeness") %>%
-  slice_max(closeness,n=round(vcount(g)*0.05,0))
-gp <- delete_vertices(g,seeds_inf)
-realization_targeted <- sim_sir(gp,beta = 0.5,mu=0.1,seeds_inf) %>%
-  group_by(t) %>% summarize(ninf=n())
-
-
-```
-
-```{r}
-No_Vaccination <- sum(realization$ninf)
 Vacc._Random <- sum(realization_random$ninf)
 Vacc._Targeted <- sum(realization_targeted$ninf)
 
-print(paste("No Vaccination", No_Vaccination))
 print(paste("Vacc. Random", Vacc._Random))
 print(paste("Vacc. Targeted", Vacc._Targeted))
 
-partd_w_n_v <- data.frame(partd_label = c("Vacc. Random", "Vacc. Targeted", "Difference in Infected",
-                                          "No Vaccination"),
-                    pard_value = c(Vacc._Random, Vacc._Targeted, Vacc._Random-Vacc._Targeted,
-                                   No_Vaccination))
+partd_w_n_v <- data.frame(partd_label = c("Vacc. Random", "Vacc. Targeted", "Difference in Infected"),
+                    pard_value = c(Vacc._Random, Vacc._Targeted, Vacc._Random-Vacc._Targeted))
 partd_w_n_v
 ```
+
+
+### Explanation for part c (1%) and part d (5%) 
 
 ```{r}
 print(paste("Total Infected (Random)", total_infected_random))
@@ -840,5 +778,3 @@ merged_table <- cbind(partc, partd) |> select(-"partd_label") |> mutate(differen
 
 merged_table 
 ```
-
-
